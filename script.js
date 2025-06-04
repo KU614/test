@@ -228,9 +228,17 @@ function initializeFurnace(furnaceId) {
     
     const sheetLengthListener = (e) => {
         furnace.sheetLength = parseInt(e.target.value) || 0;
-        calculateSheetsInFurnace(furnaceId);
+        // Добавляем проверку перед вызовом расчета
+        if (furnace.sheetLength > 0) {
+            calculateSheetsInFurnace(furnaceId);
+        } else {
+            // Если длина 0, сбрасываем количество листов
+            furnace.sheetsInFurnace = 0;
+            furnace.sheetsManual = false;
+            updateSheetsInFurnace(furnaceId);
+        }
         validateInputs(furnaceId);
-        saveFurnaceState();
+        saveFurnaceState(); // Перемещаем сохранение сюда
         updateFurnaceStatus(furnaceId);
     };
     sheetLengthInput.addEventListener('input', sheetLengthListener);
@@ -423,13 +431,13 @@ function calculateSheetsInFurnace(furnaceId) {
         furnace.sheetsInFurnace = Math.floor(baseCount);
         furnace.sheetsManual = false; // Явно сбрасываем флаг, когда значение рассчитано
         updateSheetsInFurnace(furnaceId);
-        saveFurnaceState(); // Сохраняем только после успешного расчета
+        // saveFurnaceState(); // Удаляем сохранение отсюда
     } else {
-        // Если длина листа 0 или меньше, сбрасываем количество листов и сохраняем
+        // Если длина листа 0 или меньше, сбрасываем количество листов
         furnace.sheetsInFurnace = 0;
         furnace.sheetsManual = false;
         updateSheetsInFurnace(furnaceId);
-        saveFurnaceState();
+        // saveFurnaceState(); // Удаляем сохранение отсюда
     }
 }
 
