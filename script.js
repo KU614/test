@@ -1183,8 +1183,14 @@ function updateFurnaceStats() {
     });
 }
 
+// Модифицируем функцию getCurrentUser, чтобы она возвращала email, очищенный от запрещенных символов для ключей Firebase Realtime Database
 function getCurrentUser() {
-    return firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
+    const user = firebase.auth().currentUser;
+    if (user && user.email) {
+        // Заменяем недопустимые символы (. и @) на подчеркивание
+        return user.email.replace(/\./g, '_').replace(/@/g, '_');
+    }
+    return null;
 }
 
 // Функция для запуска сигнализации
