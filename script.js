@@ -128,7 +128,8 @@ document.head.appendChild(statsStyle);
 // State management
 const state = {
     furnaces: {},
-    theme: 'light'
+    theme: 'light',
+    firebaseListeners: {}
 };
 
 // Initialize state for each furnace
@@ -218,53 +219,76 @@ function initializeFurnace(furnaceId) {
     const container = document.getElementById(furnaceId);
     
     // Add event listeners for inputs
-    container.querySelector('.sheet-length').addEventListener('input', (e) => {
+    const sheetLengthInput = container.querySelector('.sheet-length');
+    const sheetThicknessInput = container.querySelector('.sheet-thickness');
+    const heatingTimeInput = container.querySelector('.heating-time');
+    const sheetsInFurnaceInput = container.querySelector('.sheets-in-furnace');
+    const cardNumberInput = container.querySelector('.card-number');
+    const sheetsInCardInput = container.querySelector('.sheets-in-card');
+    
+    const sheetLengthListener = (e) => {
         furnace.sheetLength = parseInt(e.target.value) || 0;
         furnace.sheetsManual = false;
         calculateSheetsInFurnace(furnaceId);
         validateInputs(furnaceId);
         saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    });
+    };
+    sheetLengthInput.addEventListener('input', sheetLengthListener);
     
-    container.querySelector('.sheet-thickness').addEventListener('input', (e) => {
+    const sheetThicknessListener = (e) => {
         furnace.sheetThickness = parseInt(e.target.value) || 0;
         validateInputs(furnaceId);
         saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    });
+    };
+    sheetThicknessInput.addEventListener('input', sheetThicknessListener);
     
-    container.querySelector('.heating-time').addEventListener('input', (e) => {
+    const heatingTimeListener = (e) => {
         furnace.heatingTime = parseFloat(e.target.value) || 0;
         validateInputs(furnaceId);
         saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    });
+    };
+    heatingTimeInput.addEventListener('input', heatingTimeListener);
     
-    container.querySelector('.sheets-in-furnace').addEventListener('input', (e) => {
+    const sheetsInFurnaceListener = (e) => {
         const val = parseInt(e.target.value) || 0;
         furnace.sheetsInFurnace = val;
         furnace.sheetsManual = true;
         validateInputs(furnaceId);
         saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    });
+    };
+    sheetsInFurnaceInput.addEventListener('input', sheetsInFurnaceListener);
     
-    container.querySelector('.card-number').addEventListener('input', (e) => {
+    const cardListener = (e) => {
         furnace.cardNumber = e.target.value;
         validateInputs(furnaceId);
         saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    });
+    };
+    cardNumberInput.addEventListener('input', cardListener);
     
-    container.querySelector('.sheets-in-card').addEventListener('input', (e) => {
+    const sheetsInCardListener = (e) => {
         furnace.sheetsInCard = parseInt(e.target.value) || 0;
         furnace.remainingSheets = furnace.sheetsInCard;
         updateRemainingSheets(furnaceId);
         validateInputs(furnaceId);
         saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    });
+    };
+    sheetsInCardInput.addEventListener('input', sheetsInCardListener);
+    
+    // Сохраняем ссылки на обработчики для временного отключения
+    container._inputListeners = {
+        'sheet-length': sheetLengthListener,
+        'sheet-thickness': sheetThicknessListener,
+        'heating-time': heatingTimeListener,
+        'sheets-in-furnace': sheetsInFurnaceListener,
+        'card-number': cardListener,
+        'sheets-in-card': sheetsInCardListener
+    };
     
     // Add event listeners for buttons
     container.querySelector('.start-process').addEventListener('click', () => {
@@ -814,7 +838,11 @@ const database = firebase.database();
 // Функция для сохранения состояния в Firebase
 function saveFurnaceState() {
     const userId = getCurrentUser();
-    if (!userId) return;
+    console.log('saveFurnaceState called. userId:', userId);
+    if (!userId) {
+        console.log('saveFurnaceState: userId is null. Aborting save.');
+        return;
+    }
 
     const furnaceData = {};
     FURNACES.forEach(furnaceId => {
@@ -848,19 +876,30 @@ function saveFurnaceState() {
 // Функция для загрузки состояния из Firebase
 function loadFurnaceState() {
     const userId = getCurrentUser();
-    if (!userId) return;
+    console.log('loadFurnaceState called. userId:', userId);
+    if (!userId) {
+        console.log('loadFurnaceState: userId is null. Aborting load.');
+        return;
+    }
 
     database.ref(`users/${userId}/furnaces`).once('value')
         .then((snapshot) => {
             const data = snapshot.val();
             if (data) {
+                console.log('Data loaded from Firebase:', data);
                 FURNACES.forEach(furnaceId => {
                     if (data[furnaceId]) {
+                        // Временно отключаем слушатели ввода перед обновлением UI
+                        disableInputListeners(furnaceId);
+                        
                         state.furnaces[furnaceId] = {
                             ...state.furnaces[furnaceId],
                             ...data[furnaceId]
                         };
                         restoreFurnaceUI(furnaceId);
+
+                        // Включаем слушатели ввода обратно
+                        enableInputListeners(furnaceId);
                     }
                 });
             }
@@ -873,26 +912,97 @@ function loadFurnaceState() {
 // Добавляем слушатель изменений в реальном времени
 function setupRealtimeSync() {
     const userId = getCurrentUser();
-    if (!userId) return;
+    console.log('setupRealtimeSync called. userId:', userId);
+    if (!userId) {
+        console.log('setupRealtimeSync: userId is null. Aborting setup.');
+        return;
+    }
 
-    database.ref(`users/${userId}/furnaces`).on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-            FURNACES.forEach(furnaceId => {
-                if (data[furnaceId]) {
-                    state.furnaces[furnaceId] = {
-                        ...state.furnaces[furnaceId],
-                        ...data[furnaceId]
-                    };
-                    restoreFurnaceUI(furnaceId);
-                }
-            });
+    // Отписываемся от предыдущих слушателей, если они были
+    if (state.firebaseListeners) {
+        for (const furnaceId in state.firebaseListeners) {
+            database.ref(`users/${userId}/furnaces/${furnaceId}`).off('value', state.firebaseListeners[furnaceId]);
         }
+    }
+    state.firebaseListeners = {};
+
+    FURNACES.forEach(furnaceId => {
+        // Настраиваем слушатель для каждой печи отдельно
+        const furnaceRef = database.ref(`users/${userId}/furnaces/${furnaceId}`);
+        const listener = furnaceRef.on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+                console.log(`Realtime update for ${furnaceId}:`, data);
+                // Временно отключаем слушатели ввода перед обновлением UI
+                disableInputListeners(furnaceId);
+
+                // Обновляем состояние для этой печи
+                state.furnaces[furnaceId] = {
+                    ...state.furnaces[furnaceId],
+                    ...data
+                };
+                restoreFurnaceUI(furnaceId);
+
+                // Включаем слушатели ввода обратно
+                enableInputListeners(furnaceId);
+            } else {
+                console.log(`No data for ${furnaceId} in realtime update.`);
+            }
+        }, (error) => {
+            console.error(`Realtime update error for ${furnaceId}:`, error);
+        });
+        state.firebaseListeners[furnaceId] = listener; // Сохраняем слушатель, чтобы потом отписаться
     });
 }
 
+// Вспомогательная функция для временного отключения слушателей ввода
+function disableInputListeners(furnaceId) {
+    const container = document.getElementById(furnaceId);
+    if (!container || !container._inputListeners) return;
+
+    for (const className in container._inputListeners) {
+        const input = container.querySelector('.' + className);
+        const listener = container._inputListeners[className];
+        if (input && listener) {
+            input.removeEventListener('input', listener);
+        }
+    }
+
+    // Временно удаляем слушатели с кнопок reset-fields
+    const resetBtn = container.querySelector('.reset-fields');
+    if (resetBtn && resetBtn._originalOnClick === undefined) {
+        resetBtn._originalOnClick = resetBtn.onclick;
+        resetBtn.onclick = null;
+    }
+}
+
+// Вспомогательная функция для включения слушателей ввода обратно
+function enableInputListeners(furnaceId) {
+    const container = document.getElementById(furnaceId);
+    if (!container || !container._inputListeners) return;
+
+    for (const className in container._inputListeners) {
+        const input = container.querySelector('.' + className);
+        const listener = container._inputListeners[className];
+        if (input && listener) {
+            input.addEventListener('input', listener);
+        }
+    }
+
+    // Восстанавливаем слушатель с кнопки reset-fields
+    const resetBtn = container.querySelector('.reset-fields');
+    if (resetBtn && resetBtn._originalOnClick !== undefined) {
+        resetBtn.onclick = resetBtn._originalOnClick;
+        delete resetBtn._originalOnClick;
+    }
+}
+
+// Добавляем объект для хранения ссылок на слушатели Realtime Database
+state.firebaseListeners = {};
+
 // Добавляем обработчик состояния авторизации
 firebase.auth().onAuthStateChanged(function(user) {
+    console.log('Firebase Auth state changed. User:', user ? user.email : 'none');
     if (user) {
         // Пользователь вошел
         document.getElementById('auth-modal').style.display = 'none';
@@ -903,7 +1013,9 @@ firebase.auth().onAuthStateChanged(function(user) {
         document.getElementById('user-name').textContent = user.email;
         
         // Загружаем данные и настраиваем синхронизацию
+        console.log('Calling loadFurnaceState from onAuthStateChanged');
         loadFurnaceState();
+        console.log('Calling setupRealtimeSync from onAuthStateChanged');
         setupRealtimeSync();
         
         // Восстанавливаем UI для каждой печи
