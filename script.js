@@ -321,6 +321,11 @@ function initializeFurnace(furnaceId) {
 
     // Инициализируем начальное состояние индикатора
     updateFurnaceStatus(furnaceId);
+    
+    // Вызываем calculateSheetsInFurnace только если sheetLength > 0 при инициализации
+    if (furnace.sheetLength > 0) {
+        calculateSheetsInFurnace(furnaceId);
+    }
 }
 
 // Validate inputs and enable/disable start button
@@ -1500,4 +1505,10 @@ window.addEventListener('DOMContentLoaded', () => {
     // Инициализируем кнопки сброса журнала
     setupResetJournalButtons();
     handleTabSwitch();
+});
+
+// Добавляем слушатель события beforeunload для сохранения данных перед закрытием/обновлением страницы
+window.addEventListener('beforeunload', () => {
+    console.log('Saving state before unload...');
+    saveFurnaceState();
 }); 
