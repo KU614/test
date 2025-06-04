@@ -1,3 +1,48 @@
+// Firebase configuration
+const firebaseConfig = {
+    // Здесь нужно будет вставить ваши данные конфигурации Firebase
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_AUTH_DOMAIN",
+    databaseURL: "YOUR_DATABASE_URL",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+
+// Функция для синхронизации данных
+function syncData(data) {
+    const userId = firebase.auth().currentUser?.uid;
+    if (!userId) {
+        console.error('Пользователь не авторизован');
+        return;
+    }
+
+    database.ref(`users/${userId}/data`).set(data)
+        .then(() => console.log('Данные успешно синхронизированы'))
+        .catch((error) => console.error('Ошибка синхронизации:', error));
+}
+
+// Функция для получения синхронизированных данных
+function getSyncedData(callback) {
+    const userId = firebase.auth().currentUser?.uid;
+    if (!userId) {
+        console.error('Пользователь не авторизован');
+        return;
+    }
+
+    database.ref(`users/${userId}/data`).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (callback && data) {
+            callback(data);
+        }
+    });
+}
+
 // Constants
 const FURNACE_LENGTH = 65000;
 const FURNACES = ['rp2', 'rp3', 'rp4'];
@@ -808,134 +853,177 @@ function updateReport() {
 // Initialize all furnaces
 FURNACES.forEach(initializeFurnace);
 
-// Добавляем Firebase Realtime Database
-const database = firebase.database();
-
-// Функция для сохранения состояния в Firebase
-function saveFurnaceState() {
-    const userId = getCurrentUser();
-    console.log('saveFurnaceState called. userId:', userId);
-    if (!userId) {
-        console.log('saveFurnaceState: userId is null. Aborting save.');
-        return;
-    }
-
-    const furnaceData = {};
-    FURNACES.forEach(furnaceId => {
-        furnaceData[furnaceId] = {
-            sheetLength: state.furnaces[furnaceId].sheetLength,
-            sheetThickness: state.furnaces[furnaceId].sheetThickness,
-            heatingTime: state.furnaces[furnaceId].heatingTime,
-            sheetsInFurnace: state.furnaces[furnaceId].sheetsInFurnace,
-            cardNumber: state.furnaces[furnaceId].cardNumber,
-            sheetsInCard: state.furnaces[furnaceId].sheetsInCard,
-            remainingSheets: state.furnaces[furnaceId].remainingSheets,
-            heatingTimeLeft: state.furnaces[furnaceId].heatingTimeLeft,
-            downtimeTimeLeft: state.furnaces[furnaceId].downtimeTimeLeft,
-            isDowntime: state.furnaces[furnaceId].isDowntime,
-            isProcessStarted: state.furnaces[furnaceId].isProcessStarted,
-            journal: state.furnaces[furnaceId].journal,
-            sheetsManual: state.furnaces[furnaceId].sheetsManual
-        };
-    });
-
-    // Сохраняем в Firebase
-    database.ref(`users/${userId}/furnaces`).set(furnaceData)
-        .then(() => {
-            console.log('Состояние успешно сохранено в Firebase');
-        })
-        .catch((error) => {
-            console.error('Ошибка при сохранении состояния:', error);
-        });
+// --- Firebase Auth ---
+// Регистрация пользователя
+function registerUser(email, password) {
+  return firebase.auth().createUserWithEmailAndPassword(email, password);
 }
-
-// Функция для загрузки состояния из Firebase
-function loadFurnaceState() {
-    const userId = getCurrentUser();
-    console.log('loadFurnaceState called. userId:', userId);
-    if (!userId) {
-        console.log('loadFurnaceState: userId is null. Aborting load.');
-        return;
-    }
-
-    database.ref(`users/${userId}/furnaces`).once('value')
-        .then((snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                FURNACES.forEach(furnaceId => {
-                    if (data[furnaceId]) {
-                        state.furnaces[furnaceId] = {
-                            ...state.furnaces[furnaceId],
-                            ...data[furnaceId]
-                        };
-                        restoreFurnaceUI(furnaceId);
-                    }
-                });
-            }
-        })
-        .catch((error) => {
-            console.error('Ошибка при загрузке состояния:', error);
-        });
+// Вход пользователя
+function loginUser(email, password) {
+  return firebase.auth().signInWithEmailAndPassword(email, password);
 }
+// Выход пользователя
+function logoutUser() {
+  return firebase.auth().signOut();
+}
+// Проверка статуса авторизации
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    document.getElementById('auth-modal').style.display = 'none';
+    document.querySelector('.tab-content').style.display = '';
+    document.querySelector('.tabs').style.display = '';
+    document.querySelector('.theme-switch').style.display = '';
+    document.querySelector('.user-bar').style.display = '';
+    document.getElementById('user-name').textContent = user.email;
+    // После входа:
+    loadFurnaceState();
+    FURNACES.forEach(furnaceId => restoreFurnaceUI(furnaceId));
+    FURNACES.forEach(furnaceId => initializeFurnace(furnaceId));
+  } else {
+    document.getElementById('auth-modal').style.display = 'flex';
+    document.querySelector('.tab-content').style.display = 'none';
+    document.querySelector('.tabs').style.display = 'none';
+    document.querySelector('.theme-switch').style.display = 'none';
+    document.querySelector('.user-bar').style.display = 'none';
+    document.getElementById('user-name').textContent = '';
+  }
+});
+// --- Обработка формы входа/регистрации ---
+window.addEventListener('DOMContentLoaded', () => {
+  // Применить сохранённую тему
+  setTheme(getSavedTheme());
+  
+  // Восстановить выбранную вкладку или активировать первую по умолчанию
+  const savedTab = localStorage.getItem('selectedTab');
+  let activeTabButton = null;
 
-// Добавляем слушатель изменений в реальном времени
-function setupRealtimeSync() {
-    const userId = getCurrentUser();
-    console.log('setupRealtimeSync called. userId:', userId);
-    if (!userId) {
-        console.log('setupRealtimeSync: userId is null. Aborting setup.');
+  if (savedTab) {
+    activeTabButton = document.querySelector(`.tab-button[data-tab="${savedTab}"]`);
+  }
+
+  // Если сохраненная вкладка не найдена или элемент не существует, активируем первую
+  if (!activeTabButton) {
+    activeTabButton = document.querySelector('.tab-button');
+  }
+
+  if (activeTabButton) {
+      activeTabButton.click(); // Имитируем клик для активации вкладки
+  }
+
+  // Добавляем обработчики для модального окна инструкции
+  const instructionsBtn = document.getElementById('instructions-btn');
+  const instructionsModal = document.getElementById('instructions-modal');
+  const closeInstructions = document.querySelector('.close-instructions');
+
+  const getActiveTabId = () => {
+      const activeTab = document.querySelector('.tab-button.active');
+      console.log('getActiveTabId found activeTab:', activeTab);
+      return activeTab ? activeTab.dataset.tab : 'None';
+  };
+
+  const closeInstructionsModal = () => {
+    console.log('Closing instructions modal. Active tab before hiding:', getActiveTabId());
+    instructionsModal.style.display = 'none';
+    console.log('Instructions modal closed. Active tab after hiding:', getActiveTabId());
+  };
+
+  instructionsBtn.addEventListener('click', () => {
+    console.log('Opening instructions modal from tab:', getActiveTabId());
+    instructionsModal.style.display = 'flex';
+  });
+
+  closeInstructions.addEventListener('click', closeInstructionsModal);
+
+  // Закрытие по клику вне модального окна
+  instructionsModal.addEventListener('click', (e) => {
+    if (e.target === instructionsModal) {
+      closeInstructionsModal();
+    }
+  });
+
+  // Закрытие по клавише Escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && instructionsModal.style.display === 'flex') {
+      closeInstructionsModal();
+    }
+  });
+
+  // auth logic
+  const authForm = document.getElementById('auth-form');
+  const authTitle = document.getElementById('auth-title');
+  const authLogin = document.getElementById('auth-login');
+  const authPassword = document.getElementById('auth-password');
+  const authPassword2 = document.getElementById('auth-password2');
+  const authPassword2Group = document.getElementById('auth-password2-group');
+  const authSubmit = document.getElementById('auth-submit');
+  const authToggle = document.getElementById('auth-toggle');
+  const authError = document.getElementById('auth-error');
+  const logoutBtn = document.getElementById('logout-btn');
+  let isRegister = false;
+  function switchMode(register) {
+    isRegister = register;
+    authTitle.textContent = register ? 'Регистрация' : 'Вход';
+    authSubmit.textContent = register ? 'Зарегистрироваться' : 'Войти';
+    authToggle.textContent = register ? 'Вход' : 'Регистрация';
+    authPassword2Group.style.display = register ? '' : 'none';
+    authError.textContent = '';
+    authForm.reset();
+  }
+  authToggle.onclick = () => switchMode(!isRegister);
+  authForm.onsubmit = e => {
+    e.preventDefault();
+    const email = authLogin.value.trim();
+    const pass = authPassword.value;
+    const pass2 = authPassword2.value;
+    if (!email || !pass || (isRegister && !pass2)) {
+      authError.textContent = 'Заполните все поля!';
       return;
     }
-
-    database.ref(`users/${userId}/furnaces`).on('value', (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
+    if (isRegister) {
+      if (pass !== pass2) {
+        authError.textContent = 'Пароли не совпадают!';
+        return;
+      }
+      registerUser(email, pass)
+        .then(() => {
+          authError.textContent = '';
+          // Сбросить все пользовательские данные для нового пользователя
           FURNACES.forEach(furnaceId => {
-                if (data[furnaceId]) {
             state.furnaces[furnaceId] = {
-                        ...state.furnaces[furnaceId],
-                        ...data[furnaceId]
+              sheetLength: 800,
+              sheetThickness: 0,
+              heatingTime: 0,
+              sheetsInFurnace: 0,
+              cardNumber: '',
+              sheetsInCard: 0,
+              remainingSheets: 0,
+              heatingTimer: null,
+              downtimeTimer: null,
+              heatingTimeLeft: 0,
+              downtimeTimeLeft: 0,
+              isDowntime: false,
+              isProcessStarted: false,
+              journal: [],
+              sheetsManual: false
             };
             restoreFurnaceUI(furnaceId);
-                }
-            });
-        }
-    });
-}
-
-// Добавляем обработчик состояния авторизации
-firebase.auth().onAuthStateChanged(function(user) {
-    console.log('Firebase Auth state changed. User:', user ? user.email : 'none');
-    if (user) {
-        // Пользователь вошел
-        document.getElementById('auth-modal').style.display = 'none';
-        document.querySelector('.tab-content').style.display = '';
-        document.querySelector('.tabs').style.display = '';
-        document.querySelector('.theme-switch').style.display = '';
-        document.querySelector('.user-bar').style.display = 'flex';
-        document.getElementById('user-name').textContent = user.email;
-        
-        // Загружаем данные и настраиваем синхронизацию
-        console.log('Calling loadFurnaceState from onAuthStateChanged');
-        loadFurnaceState();
-        console.log('Calling setupRealtimeSync from onAuthStateChanged');
-        setupRealtimeSync();
-        
-        // Восстанавливаем UI для каждой печи
-        FURNACES.forEach(furnaceId => {
-            restoreFurnaceUI(furnaceId);
-            initializeFurnace(furnaceId);
-        });
+          });
+          saveFurnaceState();
+        })
+        .catch(err => authError.textContent = err.message);
     } else {
-        // Пользователь вышел
-        document.getElementById('auth-modal').style.display = 'flex';
-        document.querySelector('.tab-content').style.display = 'none';
-        document.querySelector('.tabs').style.display = 'none';
-        document.querySelector('.theme-switch').style.display = 'none';
-        document.querySelector('.user-bar').style.display = 'none';
-        document.getElementById('user-name').textContent = '';
+      loginUser(email, pass)
+        .then(() => { authError.textContent = ''; })
+        .catch(err => authError.textContent = err.message);
     }
+  };
+  logoutBtn.onclick = () => {
+    logoutUser();
+  };
+  setTimeout(setupResetJournalButtons, 500);
+  handleTabSwitch();
 });
+// --- END Firebase Auth интеграция ---
 
 // --- Переключение вкладок по стрелкам --- ВЛЕВО/ВПРАВО
 document.addEventListener('keydown', (e) => {
@@ -972,6 +1060,100 @@ document.addEventListener('keydown', (e) => {
         }
     }
 });
+
+// --- СОХРАНЕНИЕ/ЗАГРУЗКА ДАННЫХ ПЕЧЕЙ ---
+function getFurnaceStorageKey() {
+    const user = getCurrentUser();
+    return user ? `furnaceData_${user}` : null;
+}
+function saveFurnaceState() {
+    const key = getFurnaceStorageKey();
+    if (!key) return;
+    
+    const data = {};
+    FURNACES.forEach(furnaceId => {
+        const f = state.furnaces[furnaceId];
+        data[furnaceId] = {
+            sheetLength: f.sheetLength,
+            sheetThickness: f.sheetThickness,
+            heatingTime: f.heatingTime,
+            sheetsInFurnace: f.sheetsInFurnace,
+            cardNumber: f.cardNumber,
+            sheetsInCard: f.sheetsInCard,
+            remainingSheets: f.remainingSheets,
+            isDowntime: f.isDowntime,
+            isProcessStarted: f.isProcessStarted,
+            journal: f.journal,
+            sheetsManual: f.sheetsManual,
+            heatingDuration: f.heatingDuration || 0,
+            heatingStart: f.heatingStart || null,
+            pauseTotal: f.pauseTotal || 0,
+            pauseStart: f.pauseStart || null,
+            downtimeStart: f.downtimeStart || null
+        };
+    });
+    
+    localStorage.setItem(key, JSON.stringify(data));
+}
+function loadFurnaceState() {
+    const key = getFurnaceStorageKey();
+    if (!key) return;
+    
+    const data = JSON.parse(localStorage.getItem(key) || '{}');
+    
+    FURNACES.forEach(furnaceId => {
+        if (data[furnaceId]) {
+            const f = state.furnaces[furnaceId];
+            Object.assign(f, data[furnaceId]);
+            
+            // Восстанавливаем UI
+            restoreFurnaceUI(furnaceId);
+            
+            // Восстанавливаем таймеры и анимации
+            const container = document.getElementById(furnaceId);
+            if (f.isProcessStarted) {
+                if (f.isDowntime) {
+                    // Если печь в простое
+                    if (!f.downtimeTimer) {
+                        if (container) {
+                            container.querySelector('.start-downtime').disabled = true;
+                            container.querySelector('.end-downtime').disabled = false;
+                        }
+                        f.downtimeTimer = setInterval(() => {
+                            updateDowntimeTimerDisplay(furnaceId);
+                        }, 1000);
+                        // Add active class to downtime timer container
+                         if (container) container.querySelector('.downtime-timer').classList.add('active');
+                    }
+                } else if (f.heatingDuration > 0 && f.remainingSheets > 0) { // Also check remaining sheets
+                    // Если печь работает
+                    if (!f.heatingTimer) {
+                        f.heatingTimer = setInterval(() => {
+                            updateHeatingTimerDisplay(furnaceId);
+                        }, 1000);
+                         // Add active class to heating timer container
+                         if (container) container.querySelector('.heating-timer').classList.add('active');
+                    }
+                }
+            }
+            
+            // Ensure inactive state removes animations on load
+             if (!f.isProcessStarted || f.remainingSheets === 0 || f.isDowntime) {
+                 if (container) container.querySelector('.heating-timer').classList.remove('active');
+             }
+            if (!f.isDowntime) {
+                 if (container) container.querySelector('.downtime-timer').classList.remove('active');
+            }
+
+            
+            // Обновляем индикатор состояния
+            updateFurnaceStatus(furnaceId);
+        }
+    });
+    
+    // Обновляем статистику после загрузки состояния
+    updateFurnaceStats();
+}
 
 // Модифицируем функцию restoreFurnaceUI
 function restoreFurnaceUI(furnaceId) {
@@ -1198,14 +1380,8 @@ function updateFurnaceStats() {
     });
 }
 
-// Модифицируем функцию getCurrentUser, чтобы она возвращала email, очищенный от запрещенных символов для ключей Firebase Realtime Database
 function getCurrentUser() {
-    const user = firebase.auth().currentUser;
-    if (user && user.email) {
-        // Заменяем недопустимые символы (. и @) на подчеркивание
-        return user.email.replace(/\./g, '_').replace(/@/g, '_');
-    }
-    return null;
+    return firebase.auth().currentUser ? firebase.auth().currentUser.email : null;
 }
 
 // Функция для запуска сигнализации
@@ -1270,122 +1446,3 @@ const clearAllBtn = document.getElementById('clear-all-btn');
 if (clearAllBtn) {
     clearAllBtn.onclick = clearAllUserData;
 } 
-
-// Обработчики формы авторизации
-window.addEventListener('DOMContentLoaded', () => {
-    const authForm = document.getElementById('auth-form');
-    const authTitle = document.getElementById('auth-title');
-    const authLogin = document.getElementById('auth-login');
-    const authPassword = document.getElementById('auth-password');
-    const authPassword2 = document.getElementById('auth-password2');
-    const authPassword2Group = document.getElementById('auth-password2-group');
-    const authSubmit = document.getElementById('auth-submit');
-    const authToggle = document.getElementById('auth-toggle');
-    const authError = document.getElementById('auth-error');
-    const logoutBtn = document.getElementById('logout-btn');
-    let isRegister = false;
-
-    // Функция переключения между режимами входа и регистрации
-    function switchMode(register) {
-        isRegister = register;
-        authTitle.textContent = register ? 'Регистрация' : 'Вход';
-        authSubmit.textContent = register ? 'Зарегистрироваться' : 'Войти';
-        authToggle.textContent = register ? 'Вход' : 'Регистрация';
-        authPassword2Group.style.display = register ? '' : 'none';
-        authError.textContent = '';
-        authForm.reset();
-    }
-
-    // Обработчик переключения режима
-    authToggle.onclick = () => switchMode(!isRegister);
-
-    // Обработчик отправки формы
-    authForm.onsubmit = e => {
-        e.preventDefault();
-        const email = authLogin.value.trim();
-        const pass = authPassword.value;
-        const pass2 = authPassword2.value;
-
-        if (!email || !pass || (isRegister && !pass2)) {
-            authError.textContent = 'Заполните все поля!';
-            return;
-        }
-
-        if (isRegister) {
-            if (pass !== pass2) {
-                authError.textContent = 'Пароли не совпадают!';
-                return;
-            }
-            // Регистрация
-            firebase.auth().createUserWithEmailAndPassword(email, pass)
-                .then(() => {
-                    authError.textContent = '';
-                })
-                .catch(err => {
-                    authError.textContent = err.message;
-                });
-        } else {
-            // Вход
-            firebase.auth().signInWithEmailAndPassword(email, pass)
-                .then(() => {
-                    authError.textContent = '';
-                })
-                .catch(err => {
-                    authError.textContent = err.message;
-                });
-        }
-    };
-
-    // Обработчик выхода
-    logoutBtn.onclick = () => {
-        firebase.auth().signOut();
-    };
-
-    // Применяем сохраненную тему
-    setTheme(getSavedTheme());
-    
-    // Восстанавливаем выбранную вкладку
-    const savedTab = localStorage.getItem('selectedTab');
-    let activeTabButton = null;
-
-    if (savedTab) {
-        activeTabButton = document.querySelector(`.tab-button[data-tab="${savedTab}"]`);
-    }
-
-    if (!activeTabButton) {
-        activeTabButton = document.querySelector('.tab-button');
-    }
-
-    if (activeTabButton) {
-        activeTabButton.click();
-    }
-
-    // Настраиваем обработчики для модального окна инструкции
-    const instructionsBtn = document.getElementById('instructions-btn');
-    const instructionsModal = document.getElementById('instructions-modal');
-    const closeInstructions = document.querySelector('.close-instructions');
-
-    instructionsBtn.addEventListener('click', () => {
-        instructionsModal.style.display = 'flex';
-    });
-
-    closeInstructions.addEventListener('click', () => {
-        instructionsModal.style.display = 'none';
-    });
-
-    instructionsModal.addEventListener('click', (e) => {
-        if (e.target === instructionsModal) {
-            instructionsModal.style.display = 'none';
-        }
-    });
-
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && instructionsModal.style.display === 'flex') {
-            instructionsModal.style.display = 'none';
-        }
-    });
-
-    // Инициализируем кнопки сброса журнала
-    setupResetJournalButtons();
-    handleTabSwitch();
-}); 
