@@ -417,11 +417,20 @@ function startProcess(furnaceId) {
 // Calculate number of sheets in furnace
 function calculateSheetsInFurnace(furnaceId) {
     const furnace = state.furnaces[furnaceId];
-    const baseCount = FURNACE_LENGTH / furnace.sheetLength;
-    furnace.sheetsInFurnace = Math.floor(baseCount);
-    furnace.sheetsManual = false;
-    updateSheetsInFurnace(furnaceId);
-    saveFurnaceState();
+    // Расчет происходит только если длина листа больше 0
+    if (furnace.sheetLength > 0) {
+        const baseCount = FURNACE_LENGTH / furnace.sheetLength;
+        furnace.sheetsInFurnace = Math.floor(baseCount);
+        furnace.sheetsManual = false; // Явно сбрасываем флаг, когда значение рассчитано
+        updateSheetsInFurnace(furnaceId);
+        saveFurnaceState(); // Сохраняем только после успешного расчета
+    } else {
+        // Если длина листа 0 или меньше, сбрасываем количество листов и сохраняем
+        furnace.sheetsInFurnace = 0;
+        furnace.sheetsManual = false;
+        updateSheetsInFurnace(furnaceId);
+        saveFurnaceState();
+    }
 }
 
 // Calculate heating time
