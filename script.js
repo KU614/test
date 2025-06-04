@@ -228,7 +228,6 @@ function initializeFurnace(furnaceId) {
     
     const sheetLengthListener = (e) => {
         furnace.sheetLength = parseInt(e.target.value) || 0;
-        furnace.sheetsManual = false;
         calculateSheetsInFurnace(furnaceId);
         validateInputs(furnaceId);
         saveFurnaceState();
@@ -418,11 +417,10 @@ function startProcess(furnaceId) {
 // Calculate number of sheets in furnace
 function calculateSheetsInFurnace(furnaceId) {
     const furnace = state.furnaces[furnaceId];
-    if (!furnace.sheetsManual) {
-        const baseCount = FURNACE_LENGTH / furnace.sheetLength;
-        furnace.sheetsInFurnace = Math.floor(baseCount);
-        updateSheetsInFurnace(furnaceId);
-    }
+    const baseCount = FURNACE_LENGTH / furnace.sheetLength;
+    furnace.sheetsInFurnace = Math.floor(baseCount);
+    furnace.sheetsManual = false;
+    updateSheetsInFurnace(furnaceId);
     saveFurnaceState();
 }
 
