@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        "furnaces": {
+          ".read": "$uid === auth.uid",
+          ".write": "$uid === auth.uid",
+          "$furnaceId": {
+            ".read": "$uid === auth.uid",
+            ".write": "$uid === auth.uid",
+            ".validate": "newData.hasChildren(['sheetLength', 'sheetThickness', 'heatingTime', 'sheetsInFurnace', 'cardNumber', 'sheetsInCard', 'remainingSheets', 'heatingTimeLeft', 'downtimeTimeLeft', 'isDowntime', 'isProcessStarted', 'journal', 'lastUpdated'])"
+          }
+        }
+      }
+    }
+  }
+} 

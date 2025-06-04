@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система управления печами</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Firebase App (core) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <!-- Firebase Auth -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script>
+      const firebaseConfig = {
+        apiKey: "AIzaSyB8kMLawLbP29nPXoE5sou91E9IKn6Xoco",
+        authDomain: "auto-heat-report.firebaseapp.com",
+        projectId: "auto-heat-report",
+        storageBucket: "auto-heat-report.firebasestorage.app",
+        messagingSenderId: "643387280117",
+        appId: "1:643387280117:web:a06ba092caa2792a1493bc"
+      };
+      firebase.initializeApp(firebaseConfig);
+    </script>
+</head>
+<body class="light-theme">
+    <div class="top-bar">
+        <div class="tabs">
+            <button class="tab-button active" data-tab="rp2">РП-2 <span class="furnace-status status-inactive"></span></button>
+            <button class="tab-button" data-tab="rp3">РП-3 <span class="furnace-status status-inactive"></span></button>
+            <button class="tab-button" data-tab="rp4">РП-4 <span class="furnace-status status-inactive"></span></button>
+            <button class="tab-button" data-tab="report">Отчет по печам</button>
+            <button id="instructions-btn">Инструкция по расчетам</button>
+        </div>
+        <div class="theme-switch">
+            <div class="theme-toggle">
+                <input type="checkbox" id="themeToggle" class="theme-toggle-input">
+                <label for="themeToggle" class="theme-toggle-label">
+                    <div class="theme-toggle-icon">
+                        <i class="fa-solid fa-sun"></i>
+                        <i class="fa-solid fa-moon"></i>
+                    </div>
+                </label>
+            </div>
+        </div>
+        <div class="user-bar" style="display:none;">
+            <span id="user-name"></span>
+            <button id="logout-btn"><i class="fa-solid fa-right-from-bracket"></i> Выйти</button>
+        </div>
+    </div>
+    <div id="auth-modal" class="auth-modal">
+        <form id="auth-form" class="auth-form">
+            <h2 id="auth-title">Вход</h2>
+            <div class="input-group">
+                <label>Логин:</label>
+                <input type="text" id="auth-login" required autocomplete="username">
+            </div>
+            <div class="input-group">
+                <label>Пароль:</label>
+                <input type="password" id="auth-password" required autocomplete="current-password">
+            </div>
+            <div class="input-group" id="auth-password2-group" style="display:none;">
+                <label>Повторите пароль:</label>
+                <input type="password" id="auth-password2" autocomplete="new-password">
+            </div>
+            <div class="auth-actions">
+                <button type="submit" id="auth-submit">Войти</button>
+                <button type="button" id="auth-toggle">Регистрация</button>
+            </div>
+            <div class="auth-error" id="auth-error"></div>
+        </form>
+    </div>
+
+    <div id="instructions-modal" class="instructions-modal">
+        <div class="instructions-content">
+            <h2>Инструкция по расчетам</h2>
+            <div class="instructions-text">
+                <h3>Расчет количества листов в печи в зависимости от их длины:</h3>
+                <ul>
+                    <li>4500 мм. - 5000 мм. = 8 - 9 листов</li>
+                    <li>6000 мм. = 8 - 7 листов</li>
+                    <li>7000 мм. = 7 листов</li>
+                    <li>8000 мм. = 6 листов</li>
+                    <li>9000 мм. - 11000 мм. = 5 листов</li>
+                    <li>11300 мм. - 12000 мм. = 4 листа</li>
+                </ul>
+            </div>
+            <button class="close-instructions">Закрыть</button>
+        </div>
+    </div>
+
+    <div class="tab-content">
+        <div id="rp2" class="tab-pane active">
+            <div class="furnace-controls">
+                <div class="input-group">
+                    <label>Длина листа (мм):</label>
+                    <input type="number" class="sheet-length" value="800">
+                </div>
+                <div class="input-group">
+                    <label>Толщина листа (мм):</label>
+                    <input type="number" class="sheet-thickness">
+                </div>
+                <div class="input-group">
+                    <label>Удельное время нагрева (мин/мм):</label>
+                    <input type="number" class="heating-time">
+                </div>
+                <div class="input-group">
+                    <label>Количество листов в печи:</label>
+                    <input type="number" class="sheets-in-furnace">
+                </div>
+                <div class="input-group">
+                    <label>Номер формировочной карточки:</label>
+                    <input type="text" class="card-number">
+                </div>
+                <div class="input-group">
+                    <label>Количество листов в карточке:</label>
+                    <input type="number" class="sheets-in-card">
+                </div>
+                <div class="input-group">
+                    <label>Осталось листов в карточке:</label>
+                    <input type="number" class="remaining-sheets" readonly>
+                </div>
+                <div class="timers-row">
+                    <div class="heating-timer"><i class="fa-solid fa-fire"></i> Темп нагрева: <span>00:00</span></div>
+                    <div class="downtime-timer"><div class="animated-clock"><div class="clock-face"></div><div class="hour-hand"></div><div class="minute-hand"></div></div> Простой: <span>00:00:00</span></div>
+                    <div class="estimated-tempo"><i class="fa-solid fa-calculator"></i> Расчетный темп: <span>--:--</span></div>
+                </div>
+                <div class="buttons-row">
+                    <button class="reset-fields"><i class="fa-solid fa-rotate-left"></i> Сбросить значения</button>
+                    <button class="start-process" disabled><i class="fa-solid fa-play"></i> Старт</button>
+                    <button class="start-downtime"><i class="fa-solid fa-pause"></i> Начать простой</button>
+                    <button class="end-downtime" disabled><i class="fa-solid fa-check"></i> Завершить простой</button>
+                    <button class="silence-alarm" style="display: none;"><i class="fa-solid fa-volume-xmark"></i> Отключить сигнал</button>
+                </div>
+            </div>
+            <div class="furnace-journal">
+                <h3>Журнал печи РП-2 <button class="reset-journal"><i class="fa-solid fa-trash"></i> Сбросить журнал</button></h3>
+                <div class="journal-entries"></div>
+            </div>
+        </div>
+
+        <div id="rp3" class="tab-pane">
+            <div class="furnace-controls">
+                <div class="input-group">
+                    <label>Длина листа (мм):</label>
+                    <input type="number" class="sheet-length" value="800">
+                </div>
+                <div class="input-group">
+                    <label>Толщина листа (мм):</label>
+                    <input type="number" class="sheet-thickness">
+                </div>
+                <div class="input-group">
+                    <label>Удельное время нагрева (мин/мм):</label>
+                    <input type="number" class="heating-time">
+                </div>
+                <div class="input-group">
+                    <label>Количество листов в печи:</label>
+                    <input type="number" class="sheets-in-furnace">
+                </div>
+                <div class="input-group">
+                    <label>Номер формировочной карточки:</label>
+                    <input type="text" class="card-number">
+                </div>
+                <div class="input-group">
+                    <label>Количество листов в карточке:</label>
+                    <input type="number" class="sheets-in-card">
+                </div>
+                <div class="input-group">
+                    <label>Осталось листов в карточке:</label>
+                    <input type="number" class="remaining-sheets" readonly>
+                </div>
+                <div class="timers-row">
+                    <div class="heating-timer"><i class="fa-solid fa-fire"></i> Темп нагрева: <span>00:00</span></div>
+                    <div class="downtime-timer"><div class="animated-clock"><div class="clock-face"></div><div class="hour-hand"></div><div class="minute-hand"></div></div> Простой: <span>00:00:00</span></div>
+                    <div class="estimated-tempo"><i class="fa-solid fa-calculator"></i> Расчетный темп: <span>--:--</span></div>
+                </div>
+                <div class="buttons-row">
+                    <button class="reset-fields"><i class="fa-solid fa-rotate-left"></i> Сбросить значения</button>
+                    <button class="start-process" disabled><i class="fa-solid fa-play"></i> Старт</button>
+                    <button class="start-downtime"><i class="fa-solid fa-pause"></i> Начать простой</button>
+                    <button class="end-downtime" disabled><i class="fa-solid fa-check"></i> Завершить простой</button>
+                    <button class="silence-alarm" style="display: none;"><i class="fa-solid fa-volume-xmark"></i> Отключить сигнал</button>
+                </div>
+            </div>
+            <div class="furnace-journal">
+                <h3>Журнал печи РП-3 <button class="reset-journal"><i class="fa-solid fa-trash"></i> Сбросить журнал</button></h3>
+                <div class="journal-entries"></div>
+            </div>
+        </div>
+
+        <div id="rp4" class="tab-pane">
+            <div class="furnace-controls">
+                <div class="input-group">
+                    <label>Длина листа (мм):</label>
+                    <input type="number" class="sheet-length" value="800">
+                </div>
+                <div class="input-group">
+                    <label>Толщина листа (мм):</label>
+                    <input type="number" class="sheet-thickness">
+                </div>
+                <div class="input-group">
+                    <label>Удельное время нагрева (мин/мм):</label>
+                    <input type="number" class="heating-time">
+                </div>
+                <div class="input-group">
+                    <label>Количество листов в печи:</label>
+                    <input type="number" class="sheets-in-furnace">
+                </div>
+                <div class="input-group">
+                    <label>Номер формировочной карточки:</label>
+                    <input type="text" class="card-number">
+                </div>
+                <div class="input-group">
+                    <label>Количество листов в карточке:</label>
+                    <input type="number" class="sheets-in-card">
+                </div>
+                <div class="input-group">
+                    <label>Осталось листов в карточке:</label>
+                    <input type="number" class="remaining-sheets" readonly>
+                </div>
+                <div class="timers-row">
+                    <div class="heating-timer"><i class="fa-solid fa-fire"></i> Темп нагрева: <span>00:00</span></div>
+                    <div class="downtime-timer"><div class="animated-clock"><div class="clock-face"></div><div class="hour-hand"></div><div class="minute-hand"></div></div> Простой: <span>00:00:00</span></div>
+                    <div class="estimated-tempo"><i class="fa-solid fa-calculator"></i> Расчетный темп: <span>--:--</span></div>
+                </div>
+                <div class="buttons-row">
+                    <button class="reset-fields"><i class="fa-solid fa-rotate-left"></i> Сбросить значения</button>
+                    <button class="start-process" disabled><i class="fa-solid fa-play"></i> Старт</button>
+                    <button class="start-downtime"><i class="fa-solid fa-pause"></i> Начать простой</button>
+                    <button class="end-downtime" disabled><i class="fa-solid fa-check"></i> Завершить простой</button>
+                    <button class="silence-alarm" style="display: none;"><i class="fa-solid fa-volume-xmark"></i> Отключить сигнал</button>
+                </div>
+            </div>
+            <div class="furnace-journal">
+                <h3>Журнал печи РП-4 <button class="reset-journal"><i class="fa-solid fa-trash"></i> Сбросить журнал</button></h3>
+                <div class="journal-entries"></div>
+            </div>
+        </div>
+
+        <div id="report" class="tab-pane">
+            <h2>Отчет по всем печам</h2>
+            <div class="furnace-stats">
+                <div class="stat-block">
+                    <h3>РП-2</h3>
+                    <div class="stat-item">Всего листов: <span id="rp2-total-sheets">0</span></div>
+                    <div class="stat-item">Общее время простоя: <span id="rp2-total-downtime">0</span> мин</div>
+                </div>
+                <div class="stat-block">
+                    <h3>РП-3</h3>
+                    <div class="stat-item">Всего листов: <span id="rp3-total-sheets">0</span></div>
+                    <div class="stat-item">Общее время простоя: <span id="rp3-total-downtime">0</span> мин</div>
+                </div>
+                <div class="stat-block">
+                    <h3>РП-4</h3>
+                    <div class="stat-item">Всего листов: <span id="rp4-total-sheets">0</span></div>
+                    <div class="stat-item">Общее время простоя: <span id="rp4-total-downtime">0</span> мин</div>
+                </div>
+            </div>
+            <div class="report-entries"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html> 
