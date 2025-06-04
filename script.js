@@ -231,6 +231,11 @@ function initializeFurnace(furnaceId) {
         // Добавляем проверку перед вызовом расчета
         if (furnace.sheetLength > 0) {
             calculateSheetsInFurnace(furnaceId);
+            // Если количество листов в карточке уже задано, обновляем оставшиеся листы
+            if (furnace.sheetsInCard > 0) {
+                furnace.remainingSheets = furnace.sheetsInCard;
+                updateRemainingSheets(furnaceId);
+            }
         } else {
             // Если длина 0, сбрасываем количество листов
             furnace.sheetsInFurnace = 0;
@@ -273,9 +278,16 @@ function initializeFurnace(furnaceId) {
     cardNumberInput.addEventListener('input', cardListener);
     
     const sheetsInCardListener = (e) => {
-        furnace.sheetsInCard = parseInt(e.target.value) || 0;
-        furnace.remainingSheets = furnace.sheetsInCard;
-        updateRemainingSheets(furnaceId);
+        const val = parseInt(e.target.value) || 0;
+        furnace.sheetsInCard = val;
+        // Обновляем оставшиеся листы только если значение больше 0
+        if (val > 0) {
+            furnace.remainingSheets = val;
+            updateRemainingSheets(furnaceId);
+        } else {
+            furnace.remainingSheets = 0;
+            updateRemainingSheets(furnaceId);
+        }
         validateInputs(furnaceId);
         updateFurnaceStatus(furnaceId);
     };
