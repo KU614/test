@@ -128,14 +128,13 @@ document.head.appendChild(statsStyle);
 // State management
 const state = {
     furnaces: {},
-    theme: 'light',
-    firebaseListeners: {}
+    theme: 'light'
 };
 
 // Initialize state for each furnace
 FURNACES.forEach(furnaceId => {
     state.furnaces[furnaceId] = {
-        sheetLength: 0,
+        sheetLength: 800,
         sheetThickness: 0,
         heatingTime: 0,
         sheetsInFurnace: 0,
@@ -219,101 +218,68 @@ function initializeFurnace(furnaceId) {
     const container = document.getElementById(furnaceId);
     
     // Add event listeners for inputs
-    const sheetLengthInput = container.querySelector('.sheet-length');
-    const sheetThicknessInput = container.querySelector('.sheet-thickness');
-    const heatingTimeInput = container.querySelector('.heating-time');
-    const sheetsInFurnaceInput = container.querySelector('.sheets-in-furnace');
-    const cardNumberInput = container.querySelector('.card-number');
-    const sheetsInCardInput = container.querySelector('.sheets-in-card');
-    
-    const sheetLengthListener = (e) => {
+    container.querySelector('.sheet-length').addEventListener('input', (e) => {
         furnace.sheetLength = parseInt(e.target.value) || 0;
-        // Добавляем проверку перед вызовом расчета
-        if (furnace.sheetLength > 0) {
-            calculateSheetsInFurnace(furnaceId);
-            // Если количество листов в карточке уже задано, обновляем оставшиеся листы
-            if (furnace.sheetsInCard > 0) {
-                furnace.remainingSheets = furnace.sheetsInCard;
-                updateRemainingSheets(furnaceId);
-            }
-        } else {
-            // Если длина 0, сбрасываем количество листов
-            furnace.sheetsInFurnace = 0;
-            furnace.sheetsManual = false;
-            updateSheetsInFurnace(furnaceId);
-        }
+        furnace.sheetsManual = false;
+        calculateSheetsInFurnace(furnaceId);
         validateInputs(furnaceId);
+        saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    };
-    sheetLengthInput.addEventListener('input', sheetLengthListener);
+    });
     
-    const sheetThicknessListener = (e) => {
+    container.querySelector('.sheet-thickness').addEventListener('input', (e) => {
         furnace.sheetThickness = parseInt(e.target.value) || 0;
         validateInputs(furnaceId);
+        saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    };
-    sheetThicknessInput.addEventListener('input', sheetThicknessListener);
+    });
     
-    const heatingTimeListener = (e) => {
+    container.querySelector('.heating-time').addEventListener('input', (e) => {
         furnace.heatingTime = parseFloat(e.target.value) || 0;
         validateInputs(furnaceId);
+        saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    };
-    heatingTimeInput.addEventListener('input', heatingTimeListener);
+    });
     
-    const sheetsInFurnaceListener = (e) => {
+    container.querySelector('.sheets-in-furnace').addEventListener('input', (e) => {
         const val = parseInt(e.target.value) || 0;
         furnace.sheetsInFurnace = val;
         furnace.sheetsManual = true;
         validateInputs(furnaceId);
+        saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    };
-    sheetsInFurnaceInput.addEventListener('input', sheetsInFurnaceListener);
+    });
     
-    const cardListener = (e) => {
+    container.querySelector('.card-number').addEventListener('input', (e) => {
         furnace.cardNumber = e.target.value;
         validateInputs(furnaceId);
+        saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    };
-    cardNumberInput.addEventListener('input', cardListener);
+    });
     
-    const sheetsInCardListener = (e) => {
-        const val = parseInt(e.target.value) || 0;
-        furnace.sheetsInCard = val;
-        // Обновляем оставшиеся листы только если значение больше 0
-        if (val > 0) {
-            furnace.remainingSheets = val;
-            updateRemainingSheets(furnaceId);
-        } else {
-            furnace.remainingSheets = 0;
-            updateRemainingSheets(furnaceId);
-        }
+    container.querySelector('.sheets-in-card').addEventListener('input', (e) => {
+        furnace.sheetsInCard = parseInt(e.target.value) || 0;
+        furnace.remainingSheets = furnace.sheetsInCard;
+        updateRemainingSheets(furnaceId);
         validateInputs(furnaceId);
+        saveFurnaceState();
         updateFurnaceStatus(furnaceId);
-    };
-    sheetsInCardInput.addEventListener('input', sheetsInCardListener);
-    
-    // Сохраняем ссылки на обработчики для временного отключения
-    container._inputListeners = {
-        'sheet-length': sheetLengthListener,
-        'sheet-thickness': sheetThicknessListener,
-        'heating-time': heatingTimeListener,
-        'sheets-in-furnace': sheetsInFurnaceListener,
-        'card-number': cardListener,
-        'sheets-in-card': sheetsInCardListener
-    };
+    });
     
     // Add event listeners for buttons
     container.querySelector('.start-process').addEventListener('click', () => {
         startProcess(furnaceId);
+        saveFurnaceState();
     });
     
     container.querySelector('.start-downtime').addEventListener('click', () => {
         startDowntime(furnaceId);
+        saveFurnaceState();
     });
     
     container.querySelector('.end-downtime').addEventListener('click', () => {
         endDowntime(furnaceId);
+        saveFurnaceState();
     });
 
     // Добавляем обработчик для кнопки сброса
@@ -324,11 +290,6 @@ function initializeFurnace(furnaceId) {
 
     // Инициализируем начальное состояние индикатора
     updateFurnaceStatus(furnaceId);
-    
-    // Вызываем calculateSheetsInFurnace только если sheetLength > 0 при инициализации
-    if (furnace.sheetLength > 0) {
-        calculateSheetsInFurnace(furnaceId);
-    }
 }
 
 // Validate inputs and enable/disable start button
@@ -433,18 +394,12 @@ function startProcess(furnaceId) {
 // Calculate number of sheets in furnace
 function calculateSheetsInFurnace(furnaceId) {
     const furnace = state.furnaces[furnaceId];
-    // Расчет происходит только если длина листа больше 0
-    if (furnace.sheetLength > 0) {
+    if (!furnace.sheetsManual) {
         const baseCount = FURNACE_LENGTH / furnace.sheetLength;
         furnace.sheetsInFurnace = Math.floor(baseCount);
-        furnace.sheetsManual = false; // Явно сбрасываем флаг, когда значение рассчитано
-        updateSheetsInFurnace(furnaceId);
-    } else {
-        // Если длина листа 0 или меньше, сбрасываем количество листов
-        furnace.sheetsInFurnace = 0;
-        furnace.sheetsManual = false;
         updateSheetsInFurnace(furnaceId);
     }
+    saveFurnaceState();
 }
 
 // Calculate heating time
@@ -724,11 +679,13 @@ function endDowntime(furnaceId) {
 function updateSheetsInFurnace(furnaceId) {
     const container = document.getElementById(furnaceId);
     container.querySelector('.sheets-in-furnace').value = state.furnaces[furnaceId].sheetsInFurnace || '';
+    saveFurnaceState();
 }
 
 function updateRemainingSheets(furnaceId) {
     const container = document.getElementById(furnaceId);
     container.querySelector('.remaining-sheets').value = state.furnaces[furnaceId].remainingSheets;
+    saveFurnaceState();
     updateFurnaceStatus(furnaceId);
 }
 
@@ -738,6 +695,7 @@ function updateHeatingTimer(furnaceId) {
     const seconds = state.furnaces[furnaceId].heatingTimeLeft % 60;
     container.querySelector('.heating-timer span').textContent = 
         `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    saveFurnaceState();
 }
 
 function updateDowntimeTimer(furnaceId) {
@@ -747,6 +705,7 @@ function updateDowntimeTimer(furnaceId) {
     const seconds = state.furnaces[furnaceId].downtimeTimeLeft % 60;
     container.querySelector('.downtime-timer span').textContent = 
         `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    saveFurnaceState();
 }
 
 // Journal management
@@ -805,6 +764,7 @@ function updateJournal(furnaceId) {
         entryElement.textContent = message;
         journalContainer.appendChild(entryElement);
     });
+    saveFurnaceState();
     setupResetJournalButtons();
 }
 
@@ -841,6 +801,7 @@ function updateReport() {
             reportContainer.appendChild(entryElement);
         });
     });
+    saveFurnaceState();
     setupResetJournalButtons();
 }
 
@@ -901,20 +862,13 @@ function loadFurnaceState() {
         .then((snapshot) => {
             const data = snapshot.val();
             if (data) {
-                console.log('Data loaded from Firebase:', data);
                 FURNACES.forEach(furnaceId => {
                     if (data[furnaceId]) {
-                        // Временно отключаем слушатели ввода перед обновлением UI
-                        disableInputListeners(furnaceId);
-                        
                         state.furnaces[furnaceId] = {
                             ...state.furnaces[furnaceId],
                             ...data[furnaceId]
                         };
                         restoreFurnaceUI(furnaceId);
-
-                        // Включаем слушатели ввода обратно
-                        enableInputListeners(furnaceId);
                     }
                 });
             }
@@ -930,90 +884,24 @@ function setupRealtimeSync() {
     console.log('setupRealtimeSync called. userId:', userId);
     if (!userId) {
         console.log('setupRealtimeSync: userId is null. Aborting setup.');
-        return;
+      return;
     }
 
-    // Отписываемся от предыдущих слушателей, если они были
-    if (state.firebaseListeners) {
-        for (const furnaceId in state.firebaseListeners) {
-            database.ref(`users/${userId}/furnaces/${furnaceId}`).off('value', state.firebaseListeners[furnaceId]);
+    database.ref(`users/${userId}/furnaces`).on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+          FURNACES.forEach(furnaceId => {
+                if (data[furnaceId]) {
+            state.furnaces[furnaceId] = {
+                        ...state.furnaces[furnaceId],
+                        ...data[furnaceId]
+            };
+            restoreFurnaceUI(furnaceId);
+                }
+            });
         }
-    }
-    state.firebaseListeners = {};
-
-    FURNACES.forEach(furnaceId => {
-        // Настраиваем слушатель для каждой печи отдельно
-        const furnaceRef = database.ref(`users/${userId}/furnaces/${furnaceId}`);
-        const listener = furnaceRef.on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                console.log(`Realtime update for ${furnaceId}:`, data);
-                // Временно отключаем слушатели ввода перед обновлением UI
-                disableInputListeners(furnaceId);
-
-                // Обновляем состояние для этой печи
-                state.furnaces[furnaceId] = {
-                    ...state.furnaces[furnaceId],
-                    ...data
-                };
-                restoreFurnaceUI(furnaceId);
-
-                // Включаем слушатели ввода обратно
-                enableInputListeners(furnaceId);
-            } else {
-                console.log(`No data for ${furnaceId} in realtime update.`);
-            }
-        }, (error) => {
-            console.error(`Realtime update error for ${furnaceId}:`, error);
-        });
-        state.firebaseListeners[furnaceId] = listener; // Сохраняем слушатель, чтобы потом отписаться
     });
 }
-
-// Вспомогательная функция для временного отключения слушателей ввода
-function disableInputListeners(furnaceId) {
-    const container = document.getElementById(furnaceId);
-    if (!container || !container._inputListeners) return;
-
-    for (const className in container._inputListeners) {
-        const input = container.querySelector('.' + className);
-        const listener = container._inputListeners[className];
-        if (input && listener) {
-            input.removeEventListener('input', listener);
-        }
-    }
-
-    // Временно удаляем слушатели с кнопок reset-fields
-    const resetBtn = container.querySelector('.reset-fields');
-    if (resetBtn && resetBtn._originalOnClick === undefined) {
-        resetBtn._originalOnClick = resetBtn.onclick;
-        resetBtn.onclick = null;
-    }
-}
-
-// Вспомогательная функция для включения слушателей ввода обратно
-function enableInputListeners(furnaceId) {
-    const container = document.getElementById(furnaceId);
-    if (!container || !container._inputListeners) return;
-
-    for (const className in container._inputListeners) {
-        const input = container.querySelector('.' + className);
-        const listener = container._inputListeners[className];
-        if (input && listener) {
-            input.addEventListener('input', listener);
-        }
-    }
-
-    // Восстанавливаем слушатель с кнопки reset-fields
-    const resetBtn = container.querySelector('.reset-fields');
-    if (resetBtn && resetBtn._originalOnClick !== undefined) {
-        resetBtn.onclick = resetBtn._originalOnClick;
-        delete resetBtn._originalOnClick;
-    }
-}
-
-// Добавляем объект для хранения ссылок на слушатели Realtime Database
-state.firebaseListeners = {};
 
 // Добавляем обработчик состояния авторизации
 firebase.auth().onAuthStateChanged(function(user) {
@@ -1089,7 +977,7 @@ document.addEventListener('keydown', (e) => {
 function restoreFurnaceUI(furnaceId) {
     const furnace = state.furnaces[furnaceId];
     const container = document.getElementById(furnaceId);
-    container.querySelector('.sheet-length').value = furnace.sheetLength > 0 ? furnace.sheetLength : '';
+    container.querySelector('.sheet-length').value = furnace.sheetLength || 800;
     container.querySelector('.sheet-thickness').value = furnace.sheetThickness || '';
     container.querySelector('.heating-time').value = furnace.heatingTime || '';
     container.querySelector('.sheets-in-furnace').value = furnace.sheetsInFurnace || '';
@@ -1221,7 +1109,7 @@ function resetFields(furnaceId) {
     const container = document.getElementById(furnaceId);
     
     // Сбрасываем все значения
-    furnace.sheetLength = 0;
+    furnace.sheetLength = 800;
     furnace.sheetThickness = 0;
     furnace.heatingTime = 0;
     furnace.sheetsInFurnace = 0;
@@ -1250,7 +1138,7 @@ function resetFields(furnaceId) {
     });
     
     // Сбрасываем значения в полях
-    container.querySelector('.sheet-length').value = 0;
+    container.querySelector('.sheet-length').value = 800;
     container.querySelector('.sheet-thickness').value = '';
     container.querySelector('.heating-time').value = '';
     container.querySelector('.sheets-in-furnace').value = '';
@@ -1269,6 +1157,7 @@ function resetFields(furnaceId) {
     container.querySelector('.end-downtime').disabled = true;
     
     updateFurnaceStatus(furnaceId); // Обновляем индикатор на серый
+    saveFurnaceState();
 }
 
 // Функция подсчета статистики для печи
@@ -1380,7 +1269,7 @@ function stopAlarm(furnaceId) {
 const clearAllBtn = document.getElementById('clear-all-btn');
 if (clearAllBtn) {
     clearAllBtn.onclick = clearAllUserData;
-}
+} 
 
 // Обработчики формы авторизации
 window.addEventListener('DOMContentLoaded', () => {
