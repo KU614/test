@@ -135,7 +135,7 @@ const state = {
 // Initialize state for each furnace
 FURNACES.forEach(furnaceId => {
     state.furnaces[furnaceId] = {
-        sheetLength: 800,
+        sheetLength: 0,
         sheetThickness: 0,
         heatingTime: 0,
         sheetsInFurnace: 0,
@@ -1074,7 +1074,7 @@ document.addEventListener('keydown', (e) => {
 function restoreFurnaceUI(furnaceId) {
     const furnace = state.furnaces[furnaceId];
     const container = document.getElementById(furnaceId);
-    container.querySelector('.sheet-length').value = furnace.sheetLength || 800;
+    container.querySelector('.sheet-length').value = furnace.sheetLength > 0 ? furnace.sheetLength : '';
     container.querySelector('.sheet-thickness').value = furnace.sheetThickness || '';
     container.querySelector('.heating-time').value = furnace.heatingTime || '';
     container.querySelector('.sheets-in-furnace').value = furnace.sheetsInFurnace || '';
@@ -1206,7 +1206,7 @@ function resetFields(furnaceId) {
     const container = document.getElementById(furnaceId);
     
     // Сбрасываем все значения
-    furnace.sheetLength = 800;
+    furnace.sheetLength = 0;
     furnace.sheetThickness = 0;
     furnace.heatingTime = 0;
     furnace.sheetsInFurnace = 0;
@@ -1235,7 +1235,7 @@ function resetFields(furnaceId) {
     });
     
     // Сбрасываем значения в полях
-    container.querySelector('.sheet-length').value = 800;
+    container.querySelector('.sheet-length').value = 0;
     container.querySelector('.sheet-thickness').value = '';
     container.querySelector('.heating-time').value = '';
     container.querySelector('.sheets-in-furnace').value = '';
